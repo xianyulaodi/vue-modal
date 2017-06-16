@@ -1,0 +1,6 @@
+
+// 用来写一些scss的公用规则
+$view:64;  //设计稿宽度
+@function rem($px){
+    @return $px / $view  * 1rem; 
+}
