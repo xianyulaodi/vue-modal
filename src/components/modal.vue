@@ -99,8 +99,8 @@ readme.md  End **/
            <h1 class="modal-title">{{vTitle}}</h1>
            <div class="modal-content">{{vContent}}</div>
            <div class="modal-bottom">
-           		<a href="#" @click="close();">关闭</a>
-           		<a href="#">确定</a>
+           		<a href="javascript:void(0);" ref="closeprop" @click="close();">关闭</a>
+           		<a href="javascript:void(0);"  @click="BtnCallback();">确定</a>
            </div>
       </slot>
     </div>
@@ -108,13 +108,15 @@ readme.md  End **/
 </template>
 
 <script>
-  import Vue from 'vue';
-  let idSeed = 1;
-  let zIndex = 2000;
-  export default {
+import Vue from 'vue';
+let idSeed = 1;
+let zIndex = 999;
+export default {
     name: 'yys-popup',
+
     // 父组件可以传递的值
     props: {
+
     	vTitle:{
     		type:String,
     		default: '标题'
@@ -126,20 +128,10 @@ readme.md  End **/
 	      type: Boolean,
 	      default: false
 	    },
-	    transition: {
-	      type: String,
-	      default: ''
-	    },
-	    // zIndex: {},
-	    // modalClass: {},
-	    // modal: {
-	    //   	type: Boolean,
-	    //     default: true
+	    // transition: {
+	    //   type: String,
+	    //   default: ''
 	    // },
-	    modalFade: {
-	      	type: Boolean,
-	        default: false
-	    },
 	    closeOnClickModal: {  // 是否点击layout层关闭
 	        default: true  
 	    },
@@ -150,6 +142,12 @@ readme.md  End **/
 	    position: {
 	        type: String,
 	        default: ''
+	    },
+	    BtnCallback: {
+	    	type: Function,
+	    	default:function() {
+	    		this.close();
+	    	}
 	    }  	
     },
 
@@ -157,12 +155,9 @@ readme.md  End **/
       return {
         currentValue: false,
         currentTransition: this.popupTransition,
-        opened: false,
-        rendered: false,
         instances: {},
         zIndex: 2000,
         modalStack: []
-  		// modalFade: true,
       };
     },
 
@@ -174,20 +169,10 @@ readme.md  End **/
 		**/
         value(val) {
 			if (val) {
-		        if (this._opening) return; 
-		        // 弹窗只会渲染一次
-		        if (!this.rendered) {
-		          this.rendered = true;
-		          // Vue.nextTick  在修改数据之后立即使用这个方法，获取更新后的 DOM。
-		          Vue.nextTick(() => {
-		            this.open();
-		          });
-		        } else {
-		          this.open();
-		        }
+		        this.open();
 		    } else {
 		        this.close();
-		    }      	
+		    }  
             this.currentValue = val;
         }
     },
@@ -196,145 +181,41 @@ readme.md  End **/
 		// 渲染之前，创建modal实体,实体内容的id以 popup-1累加的形式
     	this._popupId = 'popup-' + idSeed++;
     	this.register(this._popupId, this); 
-	    if (this.popupTransition !== 'popup-fade') {
+	    if (this.popupTransition !== 'popup-fade') {  //弹出的动画，可自定义
 	        this.currentTransition = `popup-slide-${ this.position }`;
 	    }
     },
 
 	beforeDestroy() {
 	    this.destoryRegister(this._popupId);
-	    this.closeModal(this._popupId);
 	}, 
 
 	methods: {
 
 	    open() {
 
-	      if (!this.rendered) {
-	        this.rendered = true;
-	        this.$emit('input', true);  //传递给父组件,跟v-model通信
-	      }
-	      this.$emit('input', true);
-	      const modalDom = this.$el;  // 弹窗内容
-	      this.openModal(this._popupId, this.nextZIndex(), modalDom);
-	      modalDom.style.zIndex = this.nextZIndex();
-	      this.opened = true;
+		    const modalDom = this.$el;          // 弹窗内容
+			const layoutDom = this.getLayout(); // 遮罩层
+			this.addClass(layoutDom, 'vm-modal');
+			layoutDom.style.zIndex = this.nextZIndex();
+			document.body.appendChild(layoutDom);
+			this.modalStack.push({ id: this._popupId });	      
+		    modalDom.style.zIndex = this.nextZIndex();
+		    this.$emit('input', true);
 	    },
 
 	    close() {
 
-	      this.$emit('input', false);
-	      this.opened = false;
-	      this.closeModal(this._popupId);
-	    },
-
-	    // 获取遮罩层div，没有则创造一个
-	    getLayout() {
-
-    	  let layoutDom = this.layoutDom;
-
-		  if (!layoutDom) {
-
-		    layoutDom = document.createElement('div');
-		    this.layoutDom = layoutDom;
-		    layoutDom.addEventListener('touchmove', function(event) {
-		      event.preventDefault();
-		      event.stopPropagation();
-		    });
-		    // 遮罩层的点击
-		    var that = this;
-		    layoutDom.addEventListener('click', function() {
-		        that.doOnLayoutClick();
-		    },false);
-		  }
-
-		  return layoutDom;	
-	    },
-
-	    // 获取某一个modal实体
-	    getInstance(id) {
-		    return this.instances[id];
-		},
-
-		// 将modal实体存入对象
-		register(id, instance) {
-		    if (id && instance) {
-		      this.instances[id] = instance;
-		    }
-		},	
-
-		// 从对象中删掉弹窗实体 by id
-		destoryRegister(id) {
-		    if (id) {
-		      this.instances[id] = null;
-		      delete this.instances[id];
-		    }
-		},
-
-		// z-index管理	
-		nextZIndex() {
-		    return zIndex++;
-		},
-
-		// 遮罩层点击
-		doOnLayoutClick() {
-		    const topItem = this.modalStack[this.modalStack.length - 1];  //topItem = { id: id, zIndex: zIndex }
-		    if (!topItem) return;
-		    const instance = this.getInstance(topItem.id);
-		    if (instance && instance.closeOnClickModal) {
-		      instance.close();
-		    }
-		},	
-
-		// 打开modal实体
-		openModal: function(id, zIndex, dom) {
-		    if (!id || zIndex === undefined) return;
-
-		    const modalStack = this.modalStack;
-		    for (let i = 0, len = modalStack.length; i < len; i++) {
-		        const item = modalStack[i];
-		        if (item.id === id) {
-		          return;
-		        }
-		    }
+	        this.$emit('input', false);
+	        var id = this._popupId;
+			const modalStack = this.modalStack;
 		    const layoutDom = this.getLayout();
-		    this.addClass(layoutDom, 'vm-modal');
-
-		    // if (dom && dom.parentNode && dom.parentNode.nodeType !== 11) {
-
-		    //   dom.parentNode.appendChild(layoutDom);
-
-		    // } else {
-		      document.body.appendChild(layoutDom);
-		    // }
-		    if (zIndex) {
-		      layoutDom.style.zIndex = zIndex;
-		    }
-		    this.modalStack.push({ id: id, zIndex: zIndex });
-		},	
-
-		closeModal: function(id) {
-
-		    const modalStack = this.modalStack;
-		    const layoutDom = this.getLayout();
-
 		    if (modalStack.length > 0) {
-		      const topItem = modalStack[modalStack.length - 1];
-		      if (topItem.id === id) {
+		        const topItem = modalStack[modalStack.length - 1];
+		        if (topItem.id === id) {
 			        modalStack.pop();
-			        if (modalStack.length > 0) {
-			          layoutDom.style.zIndex = modalStack[modalStack.length - 1].zIndex;
-			        }
-		       } else {
-			        for (let i = modalStack.length - 1; i >= 0; i--) {
-			          if (modalStack[i].id === id) {
-			            modalStack.splice(i, 1);
-			            break;
-			          }
-			        }
-		        }
+		        } 
 		    }
-
 		    // 删掉layout
 		    if (modalStack.length === 0) {
 		        setTimeout(() => {
@@ -343,48 +224,96 @@ readme.md  End **/
 			        }
 			        layoutDom.style.display = 'none';
 			        this.layoutDom = null;
-			        // this.removeClass(layoutDom, 'vm-modal-leave');
-
 			    }, 200);
+		    }	        
+	    },
+
+	    // 获取遮罩层div，没有则创造一个
+	    getLayout() {
+    	    let layoutDom = this.layoutDom;
+		    if (!layoutDom) {
+		    	layoutDom = document.createElement('div');
+		    	this.layoutDom = layoutDom;
+		    	layoutDom.addEventListener('touchmove', function(event) {
+			        event.preventDefault();
+			        event.stopPropagation();
+			    });
+			    var that = this;
+			    layoutDom.addEventListener('click', function() {
+			        that.doOnLayoutClick();
+			    },false);
 		    }
-		},								
+		    return layoutDom;	
+	    },
+
+	    // 获取某一个modal实体
+	    getInstance(id) {
+		    return this.instances[id];
+		},
+
+		// 注册modal实体
+		register(id, instance) {
+		    if (id && instance) {
+		      this.instances[id] = instance;
+		    }
+		},	
+
+		// 从对象中删掉modal实体
+		destoryRegister(id) {
+		    if (id) {
+		      this.instances[id] = null;
+		      delete this.instances[id];
+		    }
+		},
+
+		// z-index管理，modal始终比layout大1，弹窗中弹窗始终比上一个弹窗大1	
+		nextZIndex() {
+		    return zIndex++;
+		},
+
+		// 遮罩层点击
+		doOnLayoutClick() {
+		    const topItem = this.modalStack[this.modalStack.length - 1];  //topItem = { id: id }
+		    if (!topItem) return;
+		    const instance = this.getInstance(topItem.id);
+		    if (instance && instance.closeOnClickModal) {
+		       instance.close();
+		    }
+		},	
 
 	    addClass(el, cls) {
 			if (!el) return;
-			  var curClass = el.className;
-			  var classes = (cls || '').split(' ');
-
-			  for (var i = 0, j = classes.length; i < j; i++) {
+		    var curClass = el.className;
+		    var classes = (cls || '').split(' ');
+		    for (var i = 0, j = classes.length; i < j; i++) {
 			    var clsName = classes[i];
 			    if (!clsName) continue;
-
 			    if (el.classList) {
-			      el.classList.add(clsName);
+			        el.classList.add(clsName);
 			    } else {
-			      if (!hasClass(el, clsName)) {
-			        curClass += ' ' + clsName;
-			      }
-			    }
-			  }
-			  if (!el.classList) {
+				    if (!hasClass(el, clsName)) {
+				        curClass += ' ' + clsName;
+				    }
+				}
+		 	}
+			if (!el.classList) {
 			    el.className = curClass;
-			  }	    	
+			}	    	
 	    },
 	    removeClass(el,cls) {
 			if (!el || !cls) return;
-			  var classes = cls.split(' ');
-			  var curClass = ' ' + el.className + ' ';
-		      for (var i = 0, j = classes.length; i < j; i++) {
+			var classes = cls.split(' ');
+			var curClass = ' ' + el.className + ' ';
+		    for (var i = 0, j = classes.length; i < j; i++) {
 			    var clsName = classes[i];
 			    if (!clsName) continue;
-
 			    if (el.classList) {
-			      el.classList.remove(clsName);
+			        el.classList.remove(clsName);
 			    } else {
-			      if (hasClass(el, clsName)) {
-			        curClass = curClass.replace(' ' + clsName + ' ', ' ');
-			    }
-		      }
+			        if (hasClass(el, clsName)) {
+			            curClass = curClass.replace(' ' + clsName + ' ', ' ');
+			        }
+		        }
 			}
 			if (!el.classList) {
 			    el.className = trim(curClass);
@@ -399,6 +328,7 @@ readme.md  End **/
       //   this.open();
       // }
     }
+
   };
 </script>
 
